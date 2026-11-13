@@ -5,7 +5,7 @@ RECURSIVE              = YES
 GENERATE_LATEX         = NO
 
 # Configuración agregada (Parte B)
-INPUT                  = app
+INPUT                  = .
 FILE_PATTERNS          = *.py
 EXTRACT_ALL            = YES
 OPTIMIZE_OUTPUT_JAVA   = YES
