@@ -4,4 +4,12 @@ OUTPUT_DIRECTORY       = "docs"
 RECURSIVE              = YES
 GENERATE_LATEX         = NO
 
-# TODO (Parte B): completa la configuración siguiendo la guía paso a paso.
+# Configuración agregada (Parte B)
+INPUT                  = app
+FILE_PATTERNS          = *.py
+EXTRACT_ALL            = YES
+OPTIMIZE_OUTPUT_JAVA   = YES
+GENERATE_HTML          = YES
+HAVE_DOT               = YES
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES

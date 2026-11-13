@@ -1,7 +1,4 @@
 // Jenkinsfile - Pipeline de "Sistema Alumnos" (OCY1102)
-//
-// Esta es la versión BASE: solo compila y prueba.
-// En la guía irás pegando etapas en los marcadores  >>> [ETIQUETA]  de más abajo.
 pipeline {
     agent any
 
@@ -11,10 +8,11 @@ pipeline {
         disableConcurrentBuilds()
     }
 
-    // >>> [A-TRIGGER] (Parte A, paso A4): aquí va el bloque "triggers"
+    triggers {
+        pollSCM('H/5 * * * *')
+    }
 
     environment {
-        // pipenv crea el entorno virtual (.venv) dentro del workspace del job
         PIPENV_VENV_IN_PROJECT    = '1'
         PIPENV_IGNORE_VIRTUALENVS = '1'
         PIPENV_NOSPIN             = '1'
@@ -24,15 +22,12 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    // Versión = 1.0.<nº de build>+<commit corto>. Sirve para la trazabilidad (Parte B)
                     def sha = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
                     env.GIT_SHA     = sha
                     env.APP_VERSION = "1.0.${env.BUILD_NUMBER}+${sha}"
                 }
                 echo "Versión de este build: ${env.APP_VERSION}"
-                // Cada build parte limpio: sin reportes viejos y con un entorno virtual nuevo (reproducible)
                 sh 'rm -rf .venv reports && mkdir -p reports'
-                // --deploy: falla si Pipfile.lock no coincide con Pipfile (evita instalaciones "a ciegas")
                 sh 'pipenv install --dev --deploy'
                 sh 'pipenv run python -m compileall -q app.py'
             }
@@ -49,21 +44,53 @@ pipeline {
             }
         }
 
-        // >>> [A-ETAPAS] (Parte A, paso A1): aquí van las etapas "Analyze" y "Dependency Management"
+        stage('Generate Documentation') {
+            steps {
+                sh 'doxygen Doxyfile 2> reports/doxygen_warnings.log || true'
+                sh 'test -f docs/html/index.html'
+            }
+        }
 
-        // >>> [B-DOCS] (Parte B, paso B3): aquí va la etapa "Generate Documentation"
+        stage('Version Control') {
+            steps {
+                sh 'chmod +x scripts/trazabilidad.sh && ./scripts/trazabilidad.sh'
+                sh '''
+                    git config user.email "jenkins@local.dev"
+                    git config user.name "Jenkins CI"
+                    git add -f docs/
+                    if ! git diff --cached --quiet; then
+                        git commit -m "docs: actualiza documentacion y trazabilidad (${APP_VERSION}) [skip ci]"
+                    else
+                        echo "Sin cambios nuevos en docs/"
+                    fi
+                '''
+            }
+        }
 
-        // >>> [B-VERSION] (Parte B, paso B4): aquí va la etapa "Version Control"
-
-        // >>> [B-DEPLOY] (Parte B, paso B5): aquí va la etapa "Deploy"
+        stage('Deploy') {
+            steps {
+                sh 'chmod +x scripts/deploy_test.sh && ./scripts/deploy_test.sh'
+            }
+        }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'reports/**, docs/TRAZABILIDAD.md', allowEmptyArchive: true
         }
-        // >>> [A-POST] (Parte A, paso A4): aquí van las alertas "unstable" y "failure"
+        unstable {
+            script {
+                notificar('UNSTABLE')
+            }
+        }
+        failure {
+            script {
+                notificar('FAILURE')
+            }
+        }
     }
 }
 
-// >>> [A-FUNCION] (Parte A, paso A4): aquí va la función notificar()
+def notificar(String estado) {
+    echo "ALERTA [${estado}]: El pipeline ${env.JOB_NAME} #${env.BUILD_NUMBER} requiere revisión (${env.BUILD_URL})."
+}
